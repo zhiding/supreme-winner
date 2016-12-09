@@ -1,0 +1,25 @@
+About paris_6k_{}_weights_{epoch}_{val_acc}.h5:
+  all_batchnorm: batch normalization layer follows every conv layer
+  part_batchnorm: batch normalization layer only follows conv layer in block 4 and block 5
+  batchnorm: batch normalization layer only follows conv layer in block 5
+  finetune: training last conv block and fc layers
+
+Results of val_acc:
+  all_batchnorm: 68.87% at the 24th epoch
+  part_batchnorm: 69.30% at the 28th epoch
+  batchnorm: 70.08% at the 21st epoch
+  finetune: 70.51% at the 39th epoch
+
+
+Since I mistake nb_class as 12 which actually is 11, excluding `general` folder,
+I run training on second time.
+
+New results of val_acc:
+  finetune  : half lr at the 23th(24th) epoch,  
+              get best acc 77.33% at the 9th(10th) epoch
+  last_bn   : half lr at the 7th(8th) epoch,
+              get best acc 81.38% at the 3rd(4th) epoch
+  last2nd_bn: get best acc 81.56% at the 24th(25th) epoch
+  all_bn    : half lr first time at 14th(15th) epoch, 
+              half lr second time at 21st(22nd) epoch,
+              get best acc 80.34% at 26th(27th) epoch 
