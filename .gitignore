@@ -87,3 +87,19 @@ ENV/
 
 # Rope project settings
 .ropeproject
+
+# My ignore file
+
+*.ipynb
+*.npy
+
+.venv
+checkpoints
+data
+dataset
+logs
+model
+notebook
+old_code
+scripts
+toyexample
