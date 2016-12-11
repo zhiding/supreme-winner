@@ -107,6 +107,7 @@ SEED = 12761
 
 summary = {
     'paris': {
+        'data': '{}/data'.format(paris_folder),
         'labels': paris_labels,
         'groundtruth': '{}/groundtruth'.format(paris_folder),
         
