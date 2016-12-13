@@ -2,6 +2,7 @@ from __future__ import print_function
 import h5py
 
 from constants import IMAGE_SHAPE
+from layers import MapwiseConnected
 
 from keras import backend as K
 from keras.models import Model
@@ -15,7 +16,8 @@ def vgg16_batchnorm(input_tensor = None,
                     nb_class     = 11,
                     include_top  = True,
                     bn_layer     = None,
-                    init_weights = None):
+                    init_weights = None,
+                    mapwise      = False):
     input_shape = IMAGE_SHAPE
     if input_tensor is None:
         img_input = Input(shape=input_shape)
@@ -92,6 +94,9 @@ def vgg16_batchnorm(input_tensor = None,
     x = Activation(activation='relu', name='block5_relu3')(x)
     x = MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)
 
+    if mapwise:
+        x = MapwiseConnected(name='mapwise')(x)
+
     if include_top:
         # classification block
         x = Flatten(name='flatten')(x)
@@ -115,4 +120,38 @@ def load_conv_weights(model, weights_path):
             layer.set_weights(weights)
     f.close()
     print('Conv layer weights loaded.')
+    return 0
+
+def load_weights_except(model, weights_path):
+    f = h5py.File(weights_path)
+    for layer in model.layers[1:]:
+        if layer.__class__.__name__ in ['Activation', 'MaxPooling2D', 'MapwiseConnected', 'Flatten']:
+            continue
+        if layer.__class__.__name__ == 'BatchNormalization':
+            g = f['model_weights'][layer.name]
+            weights = [g['{}_{}:0'.format(layer.name, p)] for p in ['gamma', 'beta', 'running_mean', 'running_std']]
+            layer.set_weights(weights)
+            continue
+        g = f['model_weights'][layer.name]
+        weights = [g['{}_{}:0'.format(layer.name, p)] for p in ['W', 'b']]
+        layer.set_weights(weights)
+    f.close()
+    print('Layers weights loaded.')
+    return 0 
+
+def load_weights_include(model, weights_path):
+    f = h5py.File(weights_path)
+    for layer in model.layers[1:]:
+        style = layer.__class__.__name__
+        if style in ['Activation', 'MaxPooling2D', 'Flatten']:
+            continue
+        else:
+            mw = f['model_weights'][layer.name]
+            if style == 'MapwiseConnected':
+                w = [ g['{}_W:0'.format(layer.name)] ]
+            else:
+                w = [ g['{}_{}:0'.format(layer.name, p)] for p in ['W', 'b'] ]
+            layer.set_weights(weights)
+    f.close()
+    print('`load_weights_include` completed.')
     return 0

@@ -13,12 +13,9 @@ from sklearn.metrics import average_precision_score
 from constants import summary
 from constants import IMAGE_SHAPE, IMAGE_WIDTH, IMAGE_HEIGHT
 from preprocess import make_content, preprocess_input
-from models import vgg16_batchnorm
+from models import vgg16_batchnorm, load_weights_except
 
-dataset = 'paris'
-env = summary[dataset]
-
-def mean_average_precision(dataset, model, layer_name, fwd_path=None, pre_path=None, crop=False):
+def mean_average_precision(dataset, model, layer_name, fwd_path, pre_path=None, crop=False):
     mean_ap = 0.
     layer = model.get_layer(layer_name)
     nb_channel = layer.output_shape[-1]
@@ -29,11 +26,11 @@ def mean_average_precision(dataset, model, layer_name, fwd_path=None, pre_path=N
     else:
         images = preprocess_all(dataset, 
                     save_path='./paris_pre_img.npy') 
-    if fwd_path is not None:
+    if os.path.exists(fwd_path):
         feature_vec = np.load(fwd_path)
     else:
         feature_vec = forward_all(nb_channel, images, 
-                    save_path='./paris_feat_vec.npy') 
+                    save_path=fwd_path) 
     content = make_content(dataset)
     for label in env['labels']:
         for num in range(1, 6):
@@ -41,11 +38,12 @@ def mean_average_precision(dataset, model, layer_name, fwd_path=None, pre_path=N
                         env['groundtruth'], label, num)
             query_img = preprocess_query(dataset, query_file, crop)
             query_vec = forward_query(query_img)
-            mean_ap += average_precision(dataset, content, label, num, query_vec, feature_vec) ## TODO CHECK IT
+            mean_ap += average_precision(dataset, content, label, num, query_vec, feature_vec) 
     mean_ap /= len(env['labels']) * 5
     return mean_ap
 
 def average_precision(dataset, content, label, num, query_vec, feature_vec):
+    env = summary[dataset]
     ap = 0.
     query = '{}/{}_{}_query.txt'.format(env['groundtruth'], label, num)
     good  = '{}/{}_{}_good.txt'.format(env['groundtruth'], label, num)
@@ -59,7 +57,7 @@ def average_precision(dataset, content, label, num, query_vec, feature_vec):
             y_true[i] = 1
     y_score = 1.0 - cdist(query_vec, feature_vec, 'cosine')[0]
     ap = average_precision_score(y_true, y_score)
-    print(query.split(os.sep)[-1], ap)
+    print(ap)
     return ap
 
 def preprocess_query(dataset, query_file, crop=False):
@@ -96,6 +94,7 @@ def forward_all(nb_channel, input_tensor, save_path=None, batch_sz=32):
         input_batch = input_tensor[current:current+batch_sz]
         featvec_batch = forward(input_batch)
         feature_vec[current:current+batch_sz] = featvec_batch
+        print('{}/{} forwarded. '.format(i, nb_batch))
     if nb_samples % batch_sz != 0:
         current = nb_batch * batch_sz
         feature_vec[current:] = forward(input_tensor[current:])
@@ -131,14 +130,16 @@ def read_txt(txtfiles):
 
     
 if __name__ == '__main__':
+    
+    ## benchmark
+    weights_path = './checkpoints/paris_finetune_weights_23_09_0.7733.h5'
+    mapwise = False
+    fwd_path = 'paris_fv_.npy'
 
-    model = vgg16_batchnorm(nb_class=11, bn_layer=None)
-    model.load_weights(
-            './checkpoints/paris_finetune_weights_23_09_0.7733.h5')
-    # mean = mean_average_precision('paris', model, 'fc2', \
-    #                 'paris_forward_finetune.npy', \
-    #                 'paris_all_imgs.npy', \
-    #                 crop=True)
-    mean = mean_average_precision('paris', model, \
-                'fc2', pre_path='paris_pre_img.npy')
+    model = vgg16_batchnorm(nb_class=11, mapwise=mapwise)
+    model.load_weights(weights_path)
+    mean = mean_average_precision('paris', model, 'fc2', \
+                fwd_path=fwd_path,
+                pre_path='paris_pre_img.npy')
     print mean
+

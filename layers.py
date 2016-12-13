@@ -13,7 +13,8 @@ class MapwiseConnected(Layer):
             dim_ordering = K.image_dim_ordering()
         assert dim_ordering in {'tf', 'th'}, 'dim_ordering must be in {tf, th}'
         self.dim_ordering = dim_ordering
-        self.W_regularizer = regularizers.get(W_regularizer) 
+        #self.W_regularizer = regularizers.get(W_regularizer) 
+        #self.W_regularizer = regularizers.l1(0.0000001)
         self.W_constraint = constraints.get(W_constraint)
         self.initial_weights = weights
         super(MapwiseConnected, self).__init__(**kwargs)
@@ -27,8 +28,8 @@ class MapwiseConnected(Layer):
         self.W = K.variable(np.ones(self.W_shape), name='{}_W'.format(self.name))
         self.trainable_weights = [self.W]
 
-        self.W_regularizer.set_param(self.W)
-        self.regularizers.append(self.W_regularizer)
+        #self.W_regularizer.set_param(self.W)
+        #self.regularizers.append(self.W_regularizer)
 
         self.constraints = {}
         self.constraints[self.W] = self.W_constraint
@@ -47,7 +48,7 @@ class MapwiseConnected(Layer):
     def get_config(self):
         config = {
                     'dim_ordering': self.dim_ordering,
-                    'W_regularizer': self.W_regularizer.get_config() if self.W_regularizer else None,
+                    #'W_regularizer': self.W_regularizer.get_config() if self.W_regularizer else None,
                     'W_constraint': self.W_constraint.get_config() if self.W_constraint else None}
         base_config = super(MapwiseConnected, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))

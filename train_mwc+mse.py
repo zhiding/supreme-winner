@@ -15,9 +15,18 @@ from keras.utils.visualize_util import plot
 
 import os, h5py
 import numpy as np
+import tensorflow as tf
 
 from constants import *
-from models import load_conv_weights, vgg16_batchnorm
+from models import load_conv_weights, vgg16_batchnorm, load_weights_except
+
+lab = 10
+gpu = '/gpu:2'
+
+def custom_objective(y_true, y_pred):
+    mse = K.mean(K.square(y_pred[:,lab]-y_true[:,lab]), axis=-1)
+    cc  = K.categorical_crossentropy(y_pred, y_true)
+    return tf.add(cc, tf.mul(mse, 0.01))
 
 def generate_config(custom_cfg):
     base_cfg = {
@@ -27,24 +36,13 @@ def generate_config(custom_cfg):
         'valid_img_path': PARIS_PATH + os.sep + 'paris_val_mean_img.npy',
         'valid_lab_path': PARIS_PATH + os.sep + 'paris_val_mean_lab.npy',
         'batch_sz': 64,
-        'nb_epoch': 20,
+        'nb_epoch': 50,
         'lr': 0.0001,
         'init_weights': VGG_WEIGHTS_NOTOP,
-        'nb_class': 11
+        'nb_class': 11,
+        'method': 'finetune'
         }
     cfg = dict(list(base_cfg.items()) + list(custom_cfg.items()))
-    if custom_cfg['vgg_version'] is None:
-        cfg['method'] = 'finetune'
-        cfg['frozen'] = 'block5_conv1'
-    elif custom_cfg['vgg_version'] == 'all':
-        cfg['method'] = 'all_bn'
-        cfg['frozen'] = None
-    elif custom_cfg['vgg_version'] == 'last':
-        cfg['method'] = 'last_bn'
-        cfg['frozen'] = 'block5_conv1'
-    elif custom_cfg['vgg_version'] == 'last2nd':
-        cfg['method'] = 'part_bn'
-        cfg['frozen'] = 'block4_conv1'
     return cfg
 
 def train(cfg):
@@ -57,9 +55,10 @@ def train(cfg):
 def load_model(cfg):
     model = vgg16_batchnorm(nb_class=cfg['nb_class'],
                             bn_layer=cfg['vgg_version'],
-                            init_weights=cfg['init_weights'])
+                            init_weights=cfg['init_weights'],
+                            mapwise=True)
     if cfg['load_weights'] is not None:
-        model.load_weights(cfg['load_weights'])
+        load_weights_except(model, cfg['load_weights'])
     return model
 
 def prepare_train(cfg):
@@ -72,24 +71,24 @@ def prepare_train(cfg):
     y_val = np_utils.to_categorical(y_val, cfg['nb_class'])
 
     model = load_model(cfg)
-    model.compile(loss='categorical_crossentropy', 
+    model.compile(loss=custom_objective,
+                  # loss='categorical_crossentropy', 
                   optimizer=Adam(lr=cfg['lr']), 
                   metrics=['accuracy'])
     
     # set frozen layers
     layers_name = [layer.name for layer in model.layers]
-    if cfg['frozen'] is not None:
-        frozen = layers_name.index(cfg['frozen'])
-        for layer in model.layers[:frozen]:
+    for layer in model.layers:
+        if layer.name != 'mapwise':
             layer.trainable = False
 
     # set checkpoint
     filepath = cfg['dataset'] + '_' + cfg['method'] \
-             + '_{epoch:02d}_{val_acc:.4f}.h5' 
+            + '_mwc+mse_0' + str(lab) + '_{epoch:02d}_{val_loss:04f}.h5' 
     checkpoint = ModelCheckpoint(filepath=filepath, 
-                                 monitor='val_acc', 
+                                 monitor='loss', 
                                  save_best_only=True, 
-                                 mode='max')
+                                 mode='min')
     history = TrainHistory()
 
     # begin training
@@ -103,13 +102,11 @@ class TrainHistory(Callback):
     def on_train_begin(self, logs={}):
         self.losses = []
         self.accs = []
-    
+
     def on_batch_begin(self, batch, logs={}):
-        self.log_loss = open('./logs/{}_{}_loss_per_batch.txt'.format(
-                                cfg['method'], cfg['lr']), 'a')
-        self.log_acc = open('./logs/{}_{}_acc_per_batch.txt'.format(
-                                cfg['method'], cfg['lr']), 'a')
-        
+        self.log_loss = open('./logs/mwc+mse_0{}_loss_per_batch.txt'.format(lab), 'a')
+        self.log_acc = open('./logs/mwc+mse_0{}_acc_per_batch.txt'.format(lab), 'a')
+
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
         self.log_loss.write('{}\n'.format(logs.get('loss')))
@@ -117,31 +114,13 @@ class TrainHistory(Callback):
         self.accs.append(logs.get('acc'))
         self.log_acc.write('{}\n'.format(logs.get('acc')))
         self.log_acc.close()
-        
 
 if __name__ == '__main__':
     ft_cfg = {
-            'gpu': '/gpu:3',
+            'gpu': gpu,
             'vgg_version': None,
-            #'load_weights': './checkpoints/paris_finetune_weights_23_09_0.7733.h5'
+            'load_weights': './checkpoints/paris_finetune_weights_23_09_0.7733.h5'
             }
     
-    all_bn_cfg = {
-            'gpu': '/gpu:3',
-            'vgg_version': 'all',
-            'load_weights': 'paris_all_bn_14_21_0.7972.h5'
-            }
-    
-    last2nd_bn_cfg = {
-            'gpu': '/gpu:2',
-            'vgg_version': 'last2nd',
-            'load_weights': 'paris_part_bn_24_0.8156.h5'
-            }
-    
-    last_bn_cfg = {
-            'gpu': '/gpu:3',
-            'vgg_version': 'last',
-            'load_weights': 'paris_last_bn_07_0.7708.h5'
-            }
     cfg = generate_config(ft_cfg)
     train(cfg) 
