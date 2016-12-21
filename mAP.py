@@ -2,10 +2,12 @@ from PIL import Image
 from glob import glob
 import numpy as np
 import os
+import sys
 
 import keras.backend as K
 from keras.models import Model
 from keras.preprocessing.image import load_img, img_to_array
+import keras.backend.tensorflow_backend as tf_bck
 
 from scipy.spatial.distance import cdist
 from sklearn.metrics import average_precision_score
@@ -132,14 +134,24 @@ def read_txt(txtfiles):
 if __name__ == '__main__':
     
     ## benchmark
-    weights_path = './checkpoints/paris_finetune_weights_23_09_0.7733.h5'
-    mapwise = False
-    fwd_path = 'paris_fv_.npy'
+    #weights_path = './checkpoints/paris_finetune_weights_23_09_0.7733.h5'
+    #mapwise = False
+    #fwd_path = 'paris_fv_.npy'
 
-    model = vgg16_batchnorm(nb_class=11, mapwise=mapwise)
-    model.load_weights(weights_path)
-    mean = mean_average_precision('paris', model, 'fc2', \
-                fwd_path=fwd_path,
-                pre_path='paris_pre_img.npy')
-    print mean
+    weights_path = sys.argv[1]
+    mapwise = True
+    fwd_path = 'paris_fv_mwc+mse_{}_{}.npy'.format(sys.argv[2], sys.argv[3])
+    gpu = '/gpu:0'
+    
+    with tf_bck.tf.device(gpu):
+        tf_bck.set_session(tf_bck.tf.Session(
+                config=tf_bck.tf.ConfigProto(
+                    allow_soft_placement=True)))
+
+        model = vgg16_batchnorm(nb_class=11, mapwise=mapwise)
+        model.load_weights(weights_path)
+        mean = mean_average_precision('paris', model, 'fc2', \
+                    fwd_path=fwd_path,
+                    pre_path='paris_pre_img.npy')
+        print mean
 

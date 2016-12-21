@@ -21,12 +21,13 @@ from constants import *
 from models import load_conv_weights, vgg16_batchnorm, load_weights_except
 
 lab = 10
-gpu = '/gpu:2'
+gpu = '/gpu:0'
+delta = 0.01
 
 def custom_objective(y_true, y_pred):
     mse = K.mean(K.square(y_pred[:,lab]-y_true[:,lab]), axis=-1)
     cc  = K.categorical_crossentropy(y_pred, y_true)
-    return tf.add(cc, tf.mul(mse, 0.01))
+    return tf.add(cc, tf.mul(mse, delta))
 
 def generate_config(custom_cfg):
     base_cfg = {
@@ -49,6 +50,7 @@ def train(cfg):
     with tf_bck.tf.device(cfg['gpu']):
         tf_bck.set_session(tf_bck.tf.Session(
                 config=tf_bck.tf.ConfigProto(
+                        #gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.5),
                         allow_soft_placement=True)))
         prepare_train(cfg)
 
@@ -84,11 +86,11 @@ def prepare_train(cfg):
 
     # set checkpoint
     filepath = cfg['dataset'] + '_' + cfg['method'] \
-            + '_mwc+mse_0' + str(lab) + '_{epoch:02d}_{val_loss:04f}.h5' 
-    checkpoint = ModelCheckpoint(filepath=filepath, 
-                                 monitor='loss', 
-                                 save_best_only=True, 
-                                 mode='min')
+            + '_mwc+mse_0' + str(lab) + '_{epoch:02d}_{val_loss:04f}_{val_acc:04f}.h5' 
+    checkpoint = ModelCheckpoint(filepath=filepath) 
+                                 #monitor='loss', 
+                                 #save_best_only=True, 
+                                 #mode='min')
     history = TrainHistory()
 
     # begin training
