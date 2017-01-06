@@ -27,8 +27,8 @@ def generate_config(custom_cfg):
         'valid_img_path': PARIS_PATH + os.sep + 'paris_val_mean_img.npy',
         'valid_lab_path': PARIS_PATH + os.sep + 'paris_val_mean_lab.npy',
         'batch_sz': 64,
-        'nb_epoch': 20,
-        'lr': 0.0001,
+        'nb_epoch': 50,
+        'lr': 0.0001/2,
         'init_weights': VGG_WEIGHTS_NOTOP,
         'nb_class': 11
         }
@@ -56,10 +56,10 @@ def train(cfg):
 
 def load_model(cfg):
     model = vgg16_batchnorm(nb_class=cfg['nb_class'],
-                            bn_layer=cfg['vgg_version'],
-                            init_weights=cfg['init_weights'])
+                            bn_layer=cfg['vgg_version'])
     if cfg['load_weights'] is not None:
-        model.load_weights(cfg['load_weights'])
+        print(cfg['load_weights'])
+        load_conv_weights(model, cfg['load_weights'])
     return model
 
 def prepare_train(cfg):
@@ -123,7 +123,8 @@ if __name__ == '__main__':
     ft_cfg = {
             'gpu': '/gpu:3',
             'vgg_version': None,
-            #'load_weights': './checkpoints/paris_finetune_weights_23_09_0.7733.h5'
+            #'load_weights': 'model/vgg16_weights_tf_dim_ordering_tf_kernels_notop.h5' 
+            'load_weights': 'paris_finetune_13_0.7203.h5'
             }
     
     all_bn_cfg = {
