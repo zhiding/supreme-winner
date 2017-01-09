@@ -5,7 +5,7 @@ config = edict()
 
 # TRAINING CONFIG
 config.BATCH_SIZE = 64
-config.EPOCH = 50
+config.EPOCH = 20
 config.GPU_ID = 0
 config.LR = 1e-4
 config.SGD = 'Adam'

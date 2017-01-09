@@ -12,7 +12,7 @@ from keras.layers.normalization import BatchNormalization
 from keras.models import Model
 
 def vgg16_bn(input_tensor = None, nb_classes   = 11,
-             include_top  = True, weight_path  = None):
+            include_top  = True, weight_path  = None):
     # set up logger
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
@@ -87,24 +87,43 @@ def vgg16_bn(input_tensor = None, nb_classes   = 11,
 
     if weight_path:
         logging.info('######## LOAD CONV LAYER WEIGHT FROM EXISTED MODEL')
-        load_weight_conv(model, weight_path)
+        try:
+            model.load_weights(weight_path, by_name=True)
+        except:
+            load_model_weight(model, weight_path)
     return model
 
-def load_weight_conv(model, weight_path):
+def load_model_weight(model, weight_path):
     f = h5py.File(weight_path)
+    g = f
     for layer in model.layers:
         layer_name = layer.name
         layer_classname = layer.__class__.__name__
         if 'model_weights' in f.keys():
-            f = f['model_weights']
+            g = f['model_weights']
         if layer_classname == 'Convolution2D':
-            g = f[layer_name]
-            for k in g.keys():
+            h = g[layer_name]
+            for k in h.keys():
                 if layer_name + '_W' in k:
                     W_weight = k
                 if layer_name + '_b' in k:
                     b_weight = k
-            weights = [ g[W_weight], g[b_weight] ]
+            weights = [ h[W_weight], h[b_weight] ]
+            layer.set_weights(weights)
+        elif layer_classname == 'BatchNormalization':
+            if layer_name not in g.keys():
+                continue;
+            h = g[layer_name]
+            for k in h.keys():
+                if layer_name + '_gamma' in k:
+                    gamma_weight = k
+                if layer_name + '_beta' in k:
+                    beta_weight = k
+                if layer_name + '_running_mean' in k:
+                    mean_weight = k
+                if layer_name + '_running_std' in k:
+                    std_weight = k
+            weights = [ h[gamma_weight], h[beta_weight], h[mean_weight], h[std_weight] ]
             layer.set_weights(weights)
     f.close()
 

@@ -21,12 +21,12 @@ from keras.utils.visualize_util import plot
 
 from config import config
 from constants import *
-from vgg16_bn_model import load_weight_conv
 from vgg16_bn_model import vgg16_bn
 
-args = parse_args()
 
 def training():
+    global args
+    args = parse_args()
     with tf_bck.tf.device('/gpu:{}'.format(args.gpu)):
         tf_bck.set_session(tf_bck.tf.Session(config=tf_bck.tf.ConfigProto(allow_soft_placement=True)))
         x_train = np.load(config.TRAIN.IMAGE)
@@ -39,42 +39,61 @@ def training():
         model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=config.LR), metrics=['accuracy'])
         
         layer_name = [ layer.name for layer in model.layers ]
-        frozen = layer_name.index('block3_conv3')
+        frozen = layer_name.index(args.frozen)
         for layer in model.layers[:frozen]:
             layer.trainable = False
        
-        checkpoint = ModelCheckpoint(filepath=config.CHECKPOINT+'-{epoch:02d}-{loss:.4f}-{val_acc:.4f}.h5',
+        checkpoint = ModelCheckpoint(filepath='./checkpoints/'+args.checkpoint+'-{epoch:02d}-{loss:.4f}-{val_acc:.4f}.h5',
                                      monitor='val_acc', mode='max')
         history = TrainHistory()
     
         model.fit(x_train, y_train, batch_size=config.BATCH_SIZE, nb_epoch=config.EPOCH, \
-                  callbacks=[ history, checkpoint], validation_data=(x_val, y_val))
+                  callbacks=[ history, checkpoint ], validation_data=(x_val, y_val))
 
 class TrainHistory(Callback):
     def on_train_begin(self, logs={}):
         self.losses = []
         self.accs = []
+        self.nb_batch = 0
+        self.avg_loss = 0.0
+        self.avg_acc = 0.0
     
     def on_batch_begin(self, batch, logs={}):
-        self.log_loss = open('./logs/{}_loss.txt'.format(args.lr), 'a')
-        self.log_acc = open('./logs/{}_acc.txt'.format(args.lr), 'a')
+        self.nb_batch += 1
+        if (self.nb_batch > 100):
+            self.log_loss = open('./logs/{}-loss.txt'.format(args.log), 'a')
+            self.log_acc = open('./logs/{}-acc.txt'.format(args.log), 'a')
         
     def on_batch_end(self, batch, logs={}):
         self.losses.append(logs.get('loss'))
-        self.log_loss.write('{}\n'.format(logs.get('loss')))
-        self.log_loss.close()
         self.accs.append(logs.get('acc'))
-        self.log_acc.write('{}\n'.format(logs.get('acc')))
-        self.log_acc.close()
+        if (self.nb_batch > 100):
+            self.avg_loss += (self.losses[-1]-self.losses[-100])
+            self.avg_acc += (self.accs[-1]-self.accs[-100])
+            self.log_loss.write('{}\n'.format(self.avg_loss/100))
+            self.log_loss.close()
+            self.log_acc.write('{}\n'.format(self.avg_acc/100))
+            self.log_acc.close()
+        else:
+            self.avg_loss += logs.get('loss')
+            self.avg_acc += logs.get('acc')
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Train VGG-16 Network')
     parser.add_argument('--pretrained', dest='pretrained', help='pretrained model prefix', 
                         default=config.PRETRAINED, type=str)
     parser.add_argument('--gpu', dest='gpu', help='gpu device id',
-                        default=0, type=int)
+                        default=0, type=str)
     parser.add_argument('--lr', dest='lr', help='learning rate',
                         default=config.LR, type=float)
+    parser.add_argument('--log', dest='log', help='log file prefix',
+                        default='', type=str)
+    parser.add_argument('--checkpoint', dest='checkpoint', help='checkpoint file preifx',
+                        default=config.CHECKPOINT, type=str)
+    parser.add_argument('--resume', dest='resume', help='resume training',
+                        default=False, type=bool)
+    parser.add_argument('--frozen', dest='frozen', help='frozen layer set lr=0.', 
+                        default='block3_conv1', type=str)
     args = parser.parse_args()
     return args
 
